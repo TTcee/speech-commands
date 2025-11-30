@@ -26,19 +26,14 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}/saved_model:/app/saved_model \
             $TRAIN_IMAGE \
-            bash -c "python train.py | tee /app/training.log"
-
-      - name: Upload trained model
-        uses: actions/upload-artifact@v4
-        with:
-          name: trained-model
-          path: saved_model/model.pth
+            bash -c "python train.py | tee /app/saved_model/training.log"
 
       - name: Upload training log
         uses: actions/upload-artifact@v4
         with:
           name: training-log
-          path: saved_model/../training.log
+          path: saved_model/training.log
+
 
   evaluate:
     needs: train
