@@ -2,7 +2,9 @@ name: lab3-ci-cd
 
 on:
   push:
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -24,16 +26,30 @@ jobs:
         run: |
           mkdir -p saved_model
           docker run --rm \
-            -v ${{ github.workspace }}/saved_model:/app/saved_model \
+            -v "${{ github.workspace }}/saved_model:/app/saved_model" \
             $TRAIN_IMAGE \
             bash -c "python train.py | tee /app/saved_model/training.log"
+
+          echo "== Contents of saved_model after training =="
+          ls -R saved_model || true
+
+          # якщо модель не збережена – вважаємо це помилкою
+          if [ ! -f saved_model/model.pth ]; then
+            echo 'ERROR: saved_model/model.pth not found after training' >&2
+            exit 1
+          fi
+
+      - name: Upload trained model
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model
+          path: saved_model/model.pth
 
       - name: Upload training log
         uses: actions/upload-artifact@v4
         with:
           name: training-log
           path: saved_model/training.log
-
 
   evaluate:
     needs: train
@@ -56,8 +72,8 @@ jobs:
         run: |
           mkdir -p metrics
           docker run --rm \
-            -v ${{ github.workspace }}/saved_model:/app/saved_model \
-            -v ${{ github.workspace }}/metrics:/app/metrics \
+            -v "${{ github.workspace }}/saved_model:/app/saved_model" \
+            -v "${{ github.workspace }}/metrics:/app/metrics" \
             $TRAIN_IMAGE \
             bash -c "python evaluate.py | tee /app/metrics/evaluate.log"
 
@@ -104,9 +120,6 @@ jobs:
       INFERENCE_IMAGE: speech-commands-inference
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
       - name: Download inference image
         uses: actions/download-artifact@v4
         with:
@@ -121,8 +134,8 @@ jobs:
         run: |
           docker run -d -p 5000:5000 --name speech-app $INFERENCE_IMAGE
           # даємо сервісу стартануть
-          sleep 10
-          # якщо curl повертає помилку – падаємо
+          sleep 15
+          # якщо curl повертає помилку – показуємо логи й фейлимося
           curl -f http://localhost:5000/ || (docker logs speech-app && exit 1)
           docker stop speech-app
           docker rm speech-app
