@@ -4,3 +4,4 @@ torchaudio
 soundfile
 numpy
 tqdm
+torchcodec

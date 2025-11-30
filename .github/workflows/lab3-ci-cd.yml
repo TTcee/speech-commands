@@ -24,8 +24,10 @@ jobs:
         run: docker build -t $TRAIN_IMAGE .
 
       - name: Train model inside container
+        shell: bash
         run: |
           mkdir -p saved_model
+          set -o pipefail
           docker run --rm \
             -v ${{ github.workspace }}/saved_model:/app/saved_model \
             $TRAIN_IMAGE \
@@ -62,8 +64,10 @@ jobs:
         run: docker build -t $TRAIN_IMAGE .
 
       - name: Run evaluation
+        shell: bash
         run: |
           mkdir -p metrics
+          set -o pipefail
           docker run --rm \
             -v ${{ github.workspace }}/saved_model:/app/saved_model \
             $TRAIN_IMAGE \
