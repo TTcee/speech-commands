@@ -1,39 +1,34 @@
-name: Lab3 CI-CD Speech Commands
+name: lab3-ci-cd
 
 on:
   push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
-env:
-  TRAIN_IMAGE: speech-commands-train
-  INFER_IMAGE: speech-commands-infer
-
 jobs:
-  # 1) ТРЕНУВАННЯ МОДЕЛІ -----------------------
   train:
     runs-on: ubuntu-latest
+    env:
+      TRAIN_IMAGE: speech-commands-train
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Build training Docker image
-        run: docker build -t $TRAIN_IMAGE .
+      - name: Build training image
+        run: |
+          docker build -t $TRAIN_IMAGE .
 
-      - name: Train model inside container
+      - name: Run training (save model)
         shell: bash
         run: |
           mkdir -p saved_model
-          set -o pipefail
           docker run --rm \
             -v ${{ github.workspace }}/saved_model:/app/saved_model \
             $TRAIN_IMAGE \
-            python train.py | tee train.log
+            bash -c "python train.py | tee /app/training.log"
 
-      - name: Upload trained model artifact
+      - name: Upload trained model
         uses: actions/upload-artifact@v4
         with:
           name: trained-model
@@ -43,14 +38,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: training-log
-          path: train.log
+          path: saved_model/../training.log
 
-  # 2) ОЦІНКА (accuracy + latency) -------------
-    evaluate:
+  evaluate:
     needs: train
     runs-on: ubuntu-latest
     env:
       TRAIN_IMAGE: speech-commands-train
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -65,7 +60,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p metrics
-          # Запускаємо той самий образ тренування, але запускаємо evaluate.py
           docker run --rm \
             -v ${{ github.workspace }}/saved_model:/app/saved_model \
             -v ${{ github.workspace }}/metrics:/app/metrics \
@@ -78,10 +72,11 @@ jobs:
           name: eval-metrics
           path: metrics/
 
-  # 3) ЗБІРКА INFERENCE-ОБРАЗУ -----------------
   build_inference:
-    runs-on: ubuntu-latest
     needs: evaluate
+    runs-on: ubuntu-latest
+    env:
+      INFERENCE_IMAGE: speech-commands-inference
 
     steps:
       - name: Checkout repo
@@ -93,38 +88,46 @@ jobs:
           name: trained-model
           path: saved_model
 
-      - name: Build inference Docker image
-        run: docker build -t $INFER_IMAGE .
-
-      - name: Save inference image as tar
+      - name: Build inference image
         run: |
-          mkdir -p artifacts
-          docker save $INFER_IMAGE | gzip > artifacts/inference_image.tar.gz
+          docker build -t $INFERENCE_IMAGE .
+
+      - name: Save inference image as artifact
+        run: |
+          docker save $INFERENCE_IMAGE -o inference-image.tar
 
       - name: Upload inference image
         uses: actions/upload-artifact@v4
         with:
           name: inference-image
-          path: artifacts/inference_image.tar.gz
+          path: inference-image.tar
 
-  # 4) SMOKE-TEST СЕРВІСУ ----------------------
   smoke_test:
-    runs-on: ubuntu-latest
     needs: build_inference
+    runs-on: ubuntu-latest
+    env:
+      INFERENCE_IMAGE: speech-commands-inference
 
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Download inference image
         uses: actions/download-artifact@v4
         with:
           name: inference-image
-          path: artifacts
+          path: .
 
       - name: Load Docker image
-        run: docker load -i artifacts/inference_image.tar.gz
+        run: docker load -i inference-image.tar
 
-      - name: Run container and check HTTP 200
+      - name: Run container and smoke test
+        shell: bash
         run: |
-          docker run -d --rm -p 5000:5000 --name speech-app $INFER_IMAGE
+          docker run -d -p 5000:5000 --name speech-app $INFERENCE_IMAGE
+          # даємо сервісу стартануть
           sleep 10
-          curl --fail http://127.0.0.1:5000/ || (docker logs speech-app && exit 1)
+          # якщо curl повертає помилку – падаємо
+          curl -f http://localhost:5000/ || (docker logs speech-app && exit 1)
           docker stop speech-app
+          docker rm speech-app
