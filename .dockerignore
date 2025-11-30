@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+.venv/
+data/
+uploads/
+*.wav
+*.mp3
+*.ogg
+*.webm

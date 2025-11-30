@@ -1,0 +1,5 @@
+flask
+torch
+torchaudio
+soundfile
+numpy
