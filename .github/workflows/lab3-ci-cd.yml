@@ -61,6 +61,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Build training image (same Dockerfile)
+        run: |
+          docker build -t $TRAIN_IMAGE .
+
       - name: Download trained model
         uses: actions/download-artifact@v4
         with:
