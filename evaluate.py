@@ -14,6 +14,8 @@ import torch                             # PyTorch для роботи з мод
 import numpy as np                       # NumPy для роботи з масивами та обчисленням середнього
 from data_loader import load_data        # Імпорт функції для завантаження test_loader
 from model import SpeechCommandCNN       # Імпорт архітектури моделі
+import json
+import os
 
 
 # === 1. Функція для обчислення точності ===
@@ -72,7 +74,7 @@ def evaluate_model():
     model.load_state_dict(torch.load("saved_model/model.pth", map_location=device))  # Завантажуємо ваги
     print("✅ Модель завантажена з saved_model/model.pth")
 
-    # Оцінка точності
+        # Оцінка точності
     accuracy = calculate_accuracy(model, test_loader, device)
     print(f"🎯 Точність моделі: {accuracy:.2f}%")
 
@@ -80,7 +82,19 @@ def evaluate_model():
     avg_latency = measure_latency(model, test_loader, device)
     print(f"⚡ Середня затримка (latency): {avg_latency:.2f} мс / приклад")
 
+    # 👉 Збереження метрик у JSON, щоб GitHub Actions міг їх забрати як артефакт
+    os.makedirs("metrics", exist_ok=True)
+    metrics = {
+        "accuracy": float(accuracy),
+        "avg_latency_ms": float(avg_latency)
+    }
+    with open("metrics/metrics.json", "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2, ensure_ascii=False)
+
+    return accuracy, avg_latency
+
 
 # === 4. Точка входу ===
 if __name__ == "__main__":
-    evaluate_model()                      # Запуск оцінки моделі
+    evaluate_model()
+

@@ -46,10 +46,11 @@ jobs:
           path: train.log
 
   # 2) ОЦІНКА (accuracy + latency) -------------
-  evaluate:
-    runs-on: ubuntu-latest
+    evaluate:
     needs: train
-
+    runs-on: ubuntu-latest
+    env:
+      TRAIN_IMAGE: speech-commands-train
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -60,24 +61,22 @@ jobs:
           name: trained-model
           path: saved_model
 
-      - name: Build evaluation Docker image
-        run: docker build -t $TRAIN_IMAGE .
-
-      - name: Run evaluation
+      - name: Run evaluation in Docker (save metrics)
         shell: bash
         run: |
           mkdir -p metrics
-          set -o pipefail
+          # Запускаємо той самий образ тренування, але запускаємо evaluate.py
           docker run --rm \
             -v ${{ github.workspace }}/saved_model:/app/saved_model \
+            -v ${{ github.workspace }}/metrics:/app/metrics \
             $TRAIN_IMAGE \
-            python evaluate.py | tee metrics/evaluate.log
+            bash -c "python evaluate.py | tee /app/metrics/evaluate.log"
 
       - name: Upload evaluation metrics
         uses: actions/upload-artifact@v4
         with:
           name: eval-metrics
-          path: metrics
+          path: metrics/
 
   # 3) ЗБІРКА INFERENCE-ОБРАЗУ -----------------
   build_inference:
