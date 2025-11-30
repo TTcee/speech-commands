@@ -1,7 +1,6 @@
 flask
-torch
-torchaudio
+torch==2.3.1
+torchaudio==2.3.1
 soundfile
 numpy
 tqdm
-torchcodec
